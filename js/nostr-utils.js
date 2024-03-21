@@ -181,7 +181,7 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
         // end of subscription messages
         if (msgType === 'EOSE') {
           // Restarting the filter is necessary to go around Max Limits for each relay. 
-          if (subscriptions[subscriptionId].counter < 2 || subscriptions[subscriptionId].filter.until != subscriptions[subscriptionId].lastEvent.created_at) { 
+          if (subscriptions[subscriptionId].counter < 2 || (subscriptions[subscriptionId].filter.until && subscriptions[subscriptionId].filter.until != subscriptions[subscriptionId].lastEvent.created_at)) { 
             subscriptions[subscriptionId].done = true
             
             let alldone = Object.values(subscriptions).every(filter => filter.done === true);
