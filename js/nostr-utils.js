@@ -56,8 +56,8 @@ const displayRelayStatus = (uiBox, relayStatusAndCount) => {
         let untilStr = "";
 
         if (relayStatusAndCount[it].until) {
-          if (relayStatusAndCount[it].until["my-sub-0"])
-            untilStr += "<td> <" + new Date(relayStatusAndCount[it].until["my-sub-0"] * 1000).toLocaleDateString("en-US") + "</td>"
+          if (relayStatusAndCount[it].until["MYSUB0"])
+            untilStr += "<td> <" + new Date(relayStatusAndCount[it].until["MYSUB0"] * 1000).toLocaleDateString("en-US") + "</td>"
           else
             untilStr += "<td> </td>"
         } else {
@@ -108,7 +108,7 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
       }, 10_000)
 
       const subscriptions = Object.fromEntries(filters.map ( (filter, index) => {
-        let id = "my-sub-"+index
+        let id = "MYSUB"+index
 
         let myFilter = filter
 
@@ -199,6 +199,9 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
             subscriptions[subscriptionId].counter = 0
             let newFilter = { ...subscriptions[subscriptionId].filter }
             newFilter.until = subscriptions[subscriptionId].lastEvent.created_at
+
+            console.log(JSON.stringify(['REQ', subscriptions[subscriptionId].id, newFilter]))
+
             ws.send(JSON.stringify(['REQ', subscriptions[subscriptionId].id, newFilter]))
           }
         }
