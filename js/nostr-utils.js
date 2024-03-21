@@ -152,8 +152,11 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
           try { 
             const { id } = data
 
-            if (!subscriptions[subscriptionId].lastEvent || data.created_at < subscriptions[subscriptionId].lastEvent.created_at)
-            subscriptions[subscriptionId].lastEvent = data
+            //console.log(data)
+
+            if (!subscriptions[subscriptionId].lastEvent || data.created_at < subscriptions[subscriptionId].lastEvent.created_at) {
+              subscriptions[subscriptionId].lastEvent = data
+            }
 
             if (data.id in subscriptions[subscriptionId].eventIds) return
 
@@ -183,7 +186,7 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
         // end of subscription messages
         if (msgType === 'EOSE') {
           // Restarting the filter is necessary to go around Max Limits for each relay. 
-          if (subscriptions[subscriptionId].counter < 2 || (subscriptions[subscriptionId].filter.until && subscriptions[subscriptionId].filter.until != subscriptions[subscriptionId].lastEvent.created_at)) { 
+          if (subscriptions[subscriptionId].counter < 2 || (subscriptions[subscriptionId].filter.until != undefined && subscriptions[subscriptionId].filter.until == subscriptions[subscriptionId].lastEvent.created_at)) { 
             subscriptions[subscriptionId].done = true
             
             let alldone = Object.values(subscriptions).every(filter => filter.done === true);
