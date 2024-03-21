@@ -32,8 +32,10 @@ const updateRelayStatus = (uiBox, relay, status, addToCount, subscription, until
     relayStatusAndCount[relay].until = {}
   }
 
-  if (subscription)
+  if (subscription) {
     relayStatusAndCount[relay].until[subscription] = until
+    changedStatus = true
+  }
 
   if (message)
     relayStatusAndCount[relay].message = message
