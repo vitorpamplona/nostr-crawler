@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Primary Meta Tags -->
+  <title>Nostr Crawler</title>
+  <meta name="title" content="Nostr Crawler" />
+  <meta name="description" content="Fetch, backup and broadcast your Nostr events" />
+
+  <!-- Favicon -->
+  <link rel="shortcut icon"
+    href="https://res.cloudinary.com/dfquzutga/image/upload/v1677188210/Screenshot_20230224_030530_Canva_2_cwvo5m.jpg"
+    type="image/x-icon" />
+  <!-- CSS -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Lightning -->
+  <meta name="lightning" content="realiefan@ln.tips" />
+  <!-- PWA -->
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="apple-touch-icon" href="https://nostr-utils.pages.dev/img/broadcast.png" />
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta property="og:title" content="Nostr Crawler">
+  <meta property="og:description" content="Find any event, anywhere">
+  <meta property="og:image"
+    content="https://res.cloudinary.com/dfquzutga/image/upload/v1677187258/20230224_024801_0000_2_m7hazu.png">
+  <!-- Replace with the URL of your larger image -->
+  <meta property="og:url" content="https://crawler.amethyst.social">
+  <meta property="og:image:width" content="1600" />
+</head>
+
+<body>
+
+  <main class="container">
+    <div class="header-space">
+      <h1>Find and Broadcast Nostr Events</h1>
+    </div>
+    <div>
+      <form>
+        <div>
+          <form>
+            <div class="space-between-small-left">
+              <p>
+                From relays
+                <input type="text" class="cool-field" id="relaySet" name="relaySet" value=""
+                  placeholder="wss://nos.lol, wss://nostr.mom or leave blank for all" />
+              </p>
+            </div>
+
+            <div class="space-between-small-left">
+              <p>
+                <input type="checkbox" id="activeDates">
+                Created from
+                <input type="date" class="cool-field" id="startDate" name="startDate" min="2024-01-01"
+                  value="2024-03-11" />
+                to
+                <input type="date" class="cool-field" id="endDate" name="endDate" min="2020-01-01" />
+              </p>
+            </div>
+
+            <div class="space-between-small-left">
+              <p>Filter: </p>
+            </div>
+
+            <div class="space-between-small-left" style="width:100%;">
+              <textarea type="text" id="filter" name="filter" class="cool-field-small" onchange="filterOnChange()"
+                rows="10" style="width:100%; resize:vertical; max-width: 100%;" placeholder="{}" required>{
+  "ids":[],
+  "authors":[],
+  "kinds":[],
+  "#e":[],
+  "#p":[],
+  "limit":200
+}</textarea>
+            </div>
+            <div class="space-between-small-left" style="width:100%;">
+              <p id="filter-error"></p>
+            </div>
+            <div class="space-between-small">
+              <div class="space-between">
+                <b>OR</b>
+              </div>
+            </div>
+            <div class="space-between">
+              <div class="space-between">
+                <p>
+                  <input type="file" id="file-selector">
+                </p>
+                <script>
+                  var fileName = ""
+
+                  const fileSelector = document.getElementById('file-selector');
+                  fileSelector.addEventListener('change', (event) => {
+                    fileName = event.target.files[0];
+                    $('#fetch-and-broadcast').css('display', 'none')
+                    $('#just-broadcast').css('display', 'inline-block')
+                  });
+                </script>
+              </div>
+            </div>
+
+            <div class="space-between-small-left">
+              <p>
+                Broadcast to relays
+                <input type="text" class="cool-field" id="relaySetBroadcast" name="relaySetBroadcast"
+                  value=""
+                  placeholder="wss://nos.lol, wss://nostr.mom, etc" />
+              </p>
+            </div>
+          </form>
+        </div>
+        <p>
+          <button id="fetch-and-broadcast" onclick="fetchAndBroadcast(); return false;">
+            Crawl & Broadcast
+          </button>
+          <button id="just-broadcast" onclick="justBroadcast(fileName); return false;" style="display: none">
+            Broadcast from File
+          </button>
+        </p>
+    </div>
+    </form>
+    </div>
+    <div class="box">
+      <div class="box-content">
+        <p id="fetching-status"></p>
+        <p style="padding-top: 2px">
+          <progress type="range" id="fetching-progress" name="fetching-progress" min="0" max="180" value="0" style="visibility: hidden" />
+        </p>
+      </div>
+      <div class="box-content" id="fetching-relays-box">
+        <table id="fetching-relays" class="fullwidth">
+          <tr id="fetching-relays-header"></tr>
+        </table>
+      </div>
+      <div class="box-content">
+        <p id="file-download"></p>
+        <p id="events-found"></p>
+      </div>
+      <div class="box-content">
+        <p id="broadcasting-status"></p>
+        <p style="padding-top: 2px">
+          <progress type="range" id="broadcasting-progress" name="broadcasting-progress" min="0" max="180" value="0" style="visibility: hidden" />
+        </p>
+      </div>
+      <div class="box-content" id="broadcasting-relays-box">
+        <table id="broadcasting-relays" class="fullwidth">
+          <tr id="broadcasting-relays-header"></tr>
+        </table>
+      </div>
+      <div class="box-content">
+        <p id="spacing"></p>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/jquery-3.6.2.min.js"></script>
+  <script src="js/nostr-utils.js"></script>
+  <script src="js/relays.js"></script>
+  <script src="js/nostr-broadcast.js"></script>
+  <script>
+    Date.prototype.toDateInputValue = (function () {
+      var local = new Date(this);
+      local.setMinutes(this.getMinutes() - this.getTimezoneOffset());
+      return local.toJSON().slice(0, 10);
+    });
+
+    document.getElementById('endDate').value = new Date().toDateInputValue()
+  </script>
+</body>
+
+</html>

@@ -1,2 +1,6 @@
-# nostr-crawler
-Find any Nostr event, anywhere
+# Nostr Crawler
+
+Crawls for any event in all available relays. 
+
+Live at https://crawler.amethyst.social
+
