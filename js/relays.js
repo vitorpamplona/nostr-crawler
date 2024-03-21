@@ -34,9 +34,9 @@ const fixedRelays = [
 ]
 
 const buggyRelays = new Set([
-  'wss://fonstr-test.onrender.com',
-  'wss://fiatjaf.com',
-  'wss://pyramid.fiatjaf.com'
+  //'wss://fonstr-test.onrender.com',
+  //'wss://fiatjaf.com',
+  //'wss://pyramid.fiatjaf.com'
 ])
 
 var allAvailableRelays = []

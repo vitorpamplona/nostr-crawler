@@ -200,9 +200,9 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
             let newFilter = { ...subscriptions[subscriptionId].filter }
             newFilter.until = subscriptions[subscriptionId].lastEvent.created_at
 
-            console.log(JSON.stringify(['REQ', subscriptions[subscriptionId].id, newFilter]))
+            //console.log(JSON.stringify(['REQ', subscriptions[subscriptionId].id, JSON.stringify(newFilter)]))
 
-            ws.send(JSON.stringify(['REQ', subscriptions[subscriptionId].id, newFilter]))
+            ws.send(JSON.stringify(['REQ', subscriptions[subscriptionId].id, JSON.stringify(newFilter)]))
           }
         }
 
