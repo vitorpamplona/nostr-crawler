@@ -80,11 +80,12 @@ const fetchAndBroadcast = async () => {
     $('#broadcasting-relays-header').html("<th>Relay</th><th>Status</th><th></th><th>Events</th><th>Message</th>")
   
     await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays")
+
+    $('#broadcasting-progress').val(relaySetBroadcast.length)
   }
 
   // inform user that broadcasting is done
   $('#broadcasting-status').html(txt.broadcasting + checkMark)
-  $('#broadcasting-progress').val(relaySetBroadcast.length)
   // re-enable broadcast button
   $('#fetch-and-broadcast').prop('disabled', false)
   $('#just-broadcast').prop('disabled', false)
