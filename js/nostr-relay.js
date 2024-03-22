@@ -162,6 +162,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         }
 
         if (msgType === 'EOSE') {
+          console.log("EOSE ", str.data)
           const subState = subscriptions[messageArray[1]]
 
           // if trully finished
