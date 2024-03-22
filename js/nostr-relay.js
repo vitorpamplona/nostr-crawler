@@ -51,6 +51,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         if (Object.keys(subscriptions).length > 0) {
           onState("Downloading")
           for (const [key, sub] of Object.entries(subscriptions)) {
+            console.log(JSON.stringify(['REQ', sub.id, sub.filter]))
             ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
           }
         }
@@ -76,6 +77,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
           signNostrAuthEvent(relay, messageArray[1]).then(
             (event) => {
               if (event) {
+                console.log(JSON.stringify(['AUTH', event]))
                 ws.send(JSON.stringify(['AUTH', event]))
               } else {
                 onState("Auth Fail")
@@ -103,6 +105,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
 
               // Refresh filters
               for (const [key, sub] of Object.entries(subscriptions)) {
+                console.log(JSON.stringify(['REQ', sub.id, sub.filter]))
                 ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
               }
             } else {
@@ -182,7 +185,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
             subState.eoseSessionCounter = 0
             subState.filter.until = subState.lastEvent.created_at - 1
 
-            ws.send(JSON.stringify(["CLOSE", subState.id]))
+            console.log(JSON.stringify(['REQ', subState.id, subState.filter]))
             ws.send(JSON.stringify(['REQ', subState.id, subState.filter]))
 
             onFilterChange(subState.filter)
