@@ -133,13 +133,6 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
           try { 
             if (!matchFilter(subState.filter, event)) {
               console.log("Didn't match filter", relay, event, subState.filter)
-
-              // buggy relay
-              onState("Buggy")
-
-              ws.close(); 
-              clearTimeout(myTimeout)
-              resolve(relay)
             } else if (subState.eventIds.has(event.id)) {
               console.log("Duplicated", relay, event, subState.filter)
             } else if (subState.filter.limit && subState.counter >= subState.filter.limit) {
@@ -171,8 +164,8 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
           // if trully finished
           if (subState.eoseSessionCounter == 0 || 
             subState.lastEvent.created_at == 0 || // bug that until becomes undefined
-            (subState.filter.limit != undefined && subState.counter >= subState.filter.limit) ||
-            (subState.filter.until != undefined && subState.filter.until == subState.lastEvent.created_at - 1)
+            (subState.filter.limit && subState.counter >= subState.filter.limit) ||
+            (subState.filter.until && subState.filter.until == subState.lastEvent.created_at - 1)
           ) { 
             subState.done = true
             
@@ -187,12 +180,11 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
             // Restarting the filter is necessary to go around Max Limits for each relay. 
 
             subState.eoseSessionCounter = 0
-            let newFilter = { ...subState.filter }
-            newFilter.until = subState.lastEvent.created_at - 1
+            subState.filter.until = subState.lastEvent.created_at - 1
 
-            ws.send(JSON.stringify(['REQ', subState.id, newFilter]))
+            ws.send(JSON.stringify(['REQ', subState.id, subState.filter]))
 
-            onFilterChange(newFilter)
+            onFilterChange(subState.filter)
           }
         }
 
