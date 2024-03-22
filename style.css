@@ -114,15 +114,6 @@ progress::-webkit-progress-value {
   background-color: #007bff;
   border-radius: 10px;
 }
-progress[value="25"]::-webkit-progress-value {
-  background-color: #ffc107;
-}
-progress[value="50"]::-webkit-progress-value {
-  background-color: #28a745;
-}
-progress[value="75"]::-webkit-progress-value {
-  background-color: #dc3545;
-}
 
 p {
   max-width: 80ch;
