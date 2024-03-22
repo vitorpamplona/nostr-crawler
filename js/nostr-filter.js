@@ -6,9 +6,10 @@ function matchFilter(filter, event) {
   
     for (let f in filter) {
       if (f[0] === '#') {
+        const key = f.slice(1)
         if (
           filter[f] &&
-          !event.tags.find(([t, v]) => t === f.slice(1) && filter[f].indexOf(v) !== -1)
+          !event.tags.find(([k, v]) => k === key && filter[f].indexOf(v) !== -1)
         )
           return false
       }
