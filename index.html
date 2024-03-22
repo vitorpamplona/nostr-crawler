@@ -61,9 +61,8 @@
               <p>Filter: </p>
             </div>
 
-            <div class="space-between-small-left" style="width:100%;">
-              <textarea type="text" id="filter" name="filter" class="cool-field-small" onchange="filterOnChange()"
-                rows="20" style="width:100%; resize:vertical; max-width: 100%;" placeholder="{}" required>[
+            <div class="space-between-small-left" style="width:100%">
+              <div id="editor" name="editor">[
   {
     "ids":[],
     "authors":["460c25e682fda7832b52d1f22d3d22b3176d972f60dcdc3212ed8c92ef85065c"],
@@ -80,7 +79,7 @@
     "#p":["460c25e682fda7832b52d1f22d3d22b3176d972f60dcdc3212ed8c92ef85065c"],
     "limit":200
   }
-]</textarea>
+]</div>
             </div>
             <div class="space-between-small-left" style="width:100%;">
               <p id="filter-error"></p>
@@ -177,6 +176,18 @@
     });
 
     document.getElementById('endDate').value = new Date().toDateInputValue()
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.3.3/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script>
+    var editor = ace.edit("editor", {
+      theme: "ace/theme/textmate",
+      mode: "ace/mode/json",
+      maxLines: 100,
+      wrap: true,
+      tabSize: 2,
+      autoScrollEditorIntoView: true
+    })
+    editor.setShowPrintMargin(false);
   </script>
 </body>
 

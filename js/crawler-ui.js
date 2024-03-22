@@ -42,7 +42,7 @@ const fetchAndBroadcast = async () => {
 
   // parse pubkey ('npub' or hexa)
   const relaySet = parseRelaySet($('#relaySet').val(), allAvailableRelays)
-  const filter = $('#filter').val()
+  const filter = editor.getValue()
   if (!filter) return
   // disable button (will be re-enable at the end of the process)
   $('#fetch-and-broadcast').prop('disabled', true)
@@ -112,17 +112,6 @@ const fetchAndBroadcast = async () => {
   // re-enable broadcast button
   $('#fetch-and-broadcast').prop('disabled', false)
   $('#just-broadcast').prop('disabled', false)
-}
-
-const filterOnChange = () => {
-  $('#fetch-and-broadcast').css('display', '')
-
-  try {
-    JSON.parse($('#filter').val())
-    $('#filter-error').text("")
-  } catch (e) {
-    $('#filter-error').text(e)
-  }
 }
 
 // button click handler

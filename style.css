@@ -71,6 +71,14 @@ h1 {font-family: Arial,Helvetica Neue,Helvetica,sans-serif;
   color: #e13333;
 }
 
+#editor { 
+  width: 100%;
+  height: 100%;
+  line-height: 1.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
+  font-size: 14px;
+}
+
 progress {
   -webkit-appearance: none;
   appearance: none;
@@ -207,7 +215,7 @@ h2 {
 }
 
 #pubkey {
-  width: 450px !important;
+  width: 650px !important;
 }
 
 @media screen and (max-width: 1080px) {
@@ -229,7 +237,7 @@ h2 {
 
 
 #relaySet {
-  width: 550px !important;
+  width: 650px !important;
 }
 
 @media screen and (max-width: 1080px) {
@@ -250,7 +258,7 @@ h2 {
 
 
 #relaySetBroadcast {
-  width: 550px !important;
+  width: 650px !important;
 }
 
 @media screen and (max-width: 1080px) {
