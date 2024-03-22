@@ -36,9 +36,9 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
             counter: 0,
             eoseSessionCounter: 0,
             okCounter: 0,
-            lastEvent: null,
+            lastEvent: undefined,
             done: false,
-            filter: filter,
+            filter: { ...filter },
             eventIds: new Set()
           }
         ]
