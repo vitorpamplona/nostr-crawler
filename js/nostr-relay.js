@@ -51,7 +51,6 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         if (Object.keys(subscriptions).length > 0) {
           onState("Downloading")
           for (const [key, sub] of Object.entries(subscriptions)) {
-            console.log(JSON.stringify(['REQ', sub.id, sub.filter]))
             ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
           }
         }
