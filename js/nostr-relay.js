@@ -49,7 +49,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         resetTimeOut()
 
         if (Object.keys(subscriptions).length > 0) {
-          onState("Waiting")
+          onState("Downloading")
           for (const [key, sub] of Object.entries(subscriptions)) {
             ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
           }
