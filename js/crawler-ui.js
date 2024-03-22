@@ -55,7 +55,7 @@ const fetchAndBroadcast = async () => {
 
   $('#fetching-relays-header-box').css('display', 'flex')
   $('#fetching-relays-box').css('display', 'flex')
-  $('#fetching-relays-header').html("<th>Relay</th><th>Status</th><th>Batch Until</th><th>Events</th><th></th>")
+  $('#fetching-relays-header').html("<th>Relay</th><th>Status</th><th>Batch Until</th><th>Events</th><th>Message</th>")
 
   // get all events from relays
   let filterObj = JSON.parse(filter)
@@ -270,6 +270,12 @@ function fetchFromRelay(relay, filters, events, uiBox) {
           relayStatus.until = newFilter.until
           displayRelayStatus(uiBox, relay, relayStatus)
         }
+      },
+      (errorMessage) => {
+        if (errorMessage && relayStatus.message != errorMessage) {
+          relayStatus.message = errorMessage
+          displayRelayStatus(uiBox, relay, relayStatus)
+        }
       }
     )
 }
@@ -302,11 +308,16 @@ function sendToRelay(relay, eventsToSend, uiBox) {
         } else {
           if (message && relayStatus.message != message) {
             relayStatus.message = message
+            displayRelayStatus(uiBox, relay, relayStatus)
           }
-
-          displayRelayStatus(uiBox, relay, relayStatus)
         }
       }, 
-      (newFilter) => {}
+      (newFilter) => {}, 
+      (errorMessage) => {
+        if (errorMessage && relayStatus.message != errorMessage) {
+          relayStatus.message = errorMessage
+          displayRelayStatus(uiBox, relay, relayStatus)
+        }
+      }
     )
 }
