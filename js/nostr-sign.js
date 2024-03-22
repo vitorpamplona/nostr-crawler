@@ -27,20 +27,13 @@ async function generateNostrEventId(msg) {
   }
   
   async function nostrSign(event) {
-    try {  
-      // set event fields
-      event.created_at = Math.floor((new Date()).getTime() / 1000);
-      event.pubkey = await window.nostr.getPublicKey();
-  
-      // Generate event id
-      event.id = await generateNostrEventId(event);
-  
-      // Sign event
-      signed_event = await window.nostr.signEvent(event);
-    } catch (e) {
-      console.log("Failed to sign message with browser extension", e);
-      return undefined;
-    }
-  
-    return signed_event;
+    // set event fields
+    event.created_at = Math.floor((new Date()).getTime() / 1000);
+    event.pubkey = await window.nostr.getPublicKey();
+
+    // Generate event id
+    event.id = await generateNostrEventId(event);
+
+    // Sign event
+    return await window.nostr.signEvent(event);
   }

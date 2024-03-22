@@ -17,84 +17,6 @@ const downloadFile = (data, fileName) => {
   tempLink.click()
 }
 
-const updateRelayStatus = (uiBox, relay, status, addToCount, subscription, until, message, relayStatusAndCount) => {
-  if (relayStatusAndCount[relay] == undefined) {
-    relayStatusAndCount[relay] = {}
-  }
-
-  let changedStatus = false
-  if (status && relayStatusAndCount[relay].status != status) {
-    changedStatus = true
-    relayStatusAndCount[relay].status = status
-  }
-
-  if (!relayStatusAndCount[relay].until) {
-    relayStatusAndCount[relay].until = {}
-  }
-
-  if (subscription) {
-    relayStatusAndCount[relay].until[subscription] = until
-    changedStatus = true
-  }
-
-  if (message)
-    relayStatusAndCount[relay].message = message
-
-  if (relayStatusAndCount[relay].count != undefined) 
-    relayStatusAndCount[relay].count = relayStatusAndCount[relay].count + addToCount
-  else 
-    relayStatusAndCount[relay].count = addToCount
-
-  if (changedStatus)  
-    displayRelayStatus(uiBox, relay, relayStatusAndCount[relay])
-}
-
-const displayAllRelayStatuses = (uiBox, relayStatusAndCount) => {
-  if (Object.keys(relayStatusAndCount).length > 0) {
-    Object.keys(relayStatusAndCount).forEach( it => {
-        displayRelayStatus(uiBox, it, relayStatusAndCount[it])
-      }
-    )
-  } else {
-    $('#'+uiBox+'-header').html("")
-    $('#'+uiBox).html("<tr id=\""+uiBox+"-header\"></tr>")
-  }
-}
-
-function displayRelayStatus(uiBoxPrefix, relay, relaySatus) {
-  let untilStr = "";
-
-  if (relaySatus.until) {
-    // shows only the first sub
-    if (relaySatus.until["MYSUB0"])
-      untilStr += "<td> <" + new Date(relaySatus.until["MYSUB0"] * 1000).toLocaleDateString("en-US") + "</td>"
-    else
-      untilStr += "<td> </td>"
-  } else {
-    untilStr += "<td> </td>"
-  }
-
-  let msg = ""
-
-  if (relaySatus.message)
-    msg = relaySatus.message
-    
-  const relayName = relay.replace("wss://", "").replace("ws://", "").split("#")[0].split("?")[0].split("/")[0]
-  const line = "<td>" + relayName + "</td><td>" + relaySatus.status + "</td>" + untilStr + "<td>" + relaySatus.count + "</td><td>" + msg + "</td>"
-
-  const elemId = uiBoxPrefix+relayName.replaceAll(".", "").replaceAll("/", "").replaceAll("-", "").replaceAll(":", "").replaceAll("%", "").replaceAll("⬤ ", "").replaceAll(" ", "").replaceAll("@", "").replaceAll("	", "")
-
-  if (elemId.trim() !== "") { 
-    if ($('#' + elemId).length > 0) {
-      $('#' + elemId).html(line)
-    } else {
-      $('#'+uiBoxPrefix).append(
-        $("<tr>" +line+ "</tr>").attr('id', elemId)
-      )
-    }
-  }
-}
-
 // button click handler
 const fetchAndBroadcast = async () => {
   // reset UI
@@ -106,6 +28,10 @@ const fetchAndBroadcast = async () => {
   $('#broadcasting-status').html('')
   $('#broadcasting-progress').css('visibility', 'hidden')
   $('#broadcasting-progress').val(0)
+
+  $('#broadcasting-relays').html("<tr id=\"broadcasting-relays-header\"></tr>")
+  $('#fetching-relays').html("<tr id=\"fetching-relays-header\"></tr>")
+  
   // messages to show to user
   const checkMark = '&#10003;'
   const txt = {
@@ -147,7 +73,7 @@ const fetchAndBroadcast = async () => {
     }
   }
 
-  const data = (await getEvents([filterObj], relaySet, "fetching-relays", updateRelayStatus)).sort((a, b) => b.created_at - a.created_at)
+  const data = (await getEvents([filterObj], relaySet, "fetching-relays")).sort((a, b) => b.created_at - a.created_at)
 
   // inform user fetching is done
   $('#fetching-status').html(txt.fetching + checkMark)
@@ -176,7 +102,7 @@ const fetchAndBroadcast = async () => {
     $('#broadcasting-relays-box').css('display', 'flex')
     $('#broadcasting-relays-header').html("<th>Relay</th><th>Status</th><th></th><th>Events</th><th>Message</th>")
   
-    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays", updateRelayStatus)
+    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays")
 
     $('#broadcasting-progress').val(relaySetBroadcast.length)
   }
@@ -227,6 +153,8 @@ const broadcast = async (data) => {
     download: `Downloading Backup file... ${checkMark}`,
   }
 
+  const relaySetBroadcast = parseRelaySet($('#relaySetBroadcast').val(), undefined)
+
   // show and update fetching progress bar
   $('#fetching-progress').css('visibility', 'visible')
   $('#fetching-progress').prop('max', relaySetBroadcast.length)
@@ -234,8 +162,6 @@ const broadcast = async (data) => {
   // inform user fetching is done
   $('#fetching-status').html(txt.fetching + checkMark)
   $('#fetching-progress').val(relaySetBroadcast.length)
-
-  const relaySetBroadcast = parseRelaySet($('#relaySetBroadcast').val(), undefined)
 
   if (relaySetBroadcast) {
     // disable button (will be re-enable at the end of the process)
@@ -250,9 +176,9 @@ const broadcast = async (data) => {
     
     $('#broadcasting-relays-header-box').css('display', 'flex')
     $('#broadcasting-relays-box').css('display', 'flex')
-    $('#broadcasting-relays-header').html("<th>Relay</th><th>Status</th><th></th><th></th><th>Events</th><th>Message</th>")
+    $('#broadcasting-relays-header').html("<th>Relay</th><th>Status</th><th></th><th>Events</th><th>Message</th>")
 
-    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays", updateRelayStatus)
+    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays")
 
     // re-enable broadcast button
     $('#fetch-and-broadcast').prop('disabled', false)
@@ -261,4 +187,126 @@ const broadcast = async (data) => {
   // inform user that broadcasting is done
   $('#broadcasting-status').html(txt.broadcasting + checkMark)
   $('#broadcasting-progress').val(relaySetBroadcast.length)
+}
+
+// query relays for events published by this pubkey
+const getEvents = async (filters, relaySet, uiBox) => {
+  // events hash
+  const events = {}
+
+  // batch processing of 10 relays
+  await processInPool(relaySet, (relay) => fetchFromRelay(relay, filters, events, uiBox), 10, (progress) => $('#fetching-progress').val(progress))
+
+  // return data as an array of events
+  return Object.keys(events).map((id) => events[id])
+}
+
+// broadcast events to list of relays
+const broadcastEvents = async (data, relaySet, uiBox) => {
+  await processInPool(relaySet, (relay) => sendToRelay(relay, data, uiBox), 10, (progress) => $('#broadcasting-progress').val(progress))
+}
+
+function displayRelayStatus(uiBoxPrefix, relay, relaySatus) {
+  let untilStr = "";
+
+  if (relaySatus.until) {
+    untilStr += "<td> <" + new Date(relaySatus.until * 1000).toLocaleDateString("en-US") + "</td>"
+  } else {
+    untilStr += "<td> </td>"
+  }
+
+  let msg = ""
+
+  if (relaySatus.message)
+    msg = relaySatus.message
+    
+  const relayName = relay.replace("wss://", "").replace("ws://", "").split("#")[0].split("?")[0].split("/")[0]
+  const line = "<td>" + relayName + "</td><td>" + relaySatus.status + "</td>" + untilStr + "<td>" + relaySatus.count + "</td><td>" + msg + "</td>"
+
+  const elemId = uiBoxPrefix+relayName.replaceAll(".", "").replaceAll("/", "").replaceAll("-", "").replaceAll(":", "").replaceAll("%", "").replaceAll("⬤ ", "").replaceAll(" ", "").replaceAll("@", "").replaceAll("	", "")
+
+  if (elemId.trim() !== "") { 
+    if ($('#' + elemId).length > 0) {
+      $('#' + elemId).html(line)
+    } else {
+      $('#'+uiBoxPrefix).append(
+        $("<tr>" +line+ "</tr>").attr('id', elemId)
+      )
+    }
+  }
+}
+
+// fetch events from relay, returns a promise
+function fetchFromRelay(relay, filters, events, uiBox) {
+  let relayStatus = {
+    count: 0
+  }
+
+  return openRelay(
+      relay, 
+      filters,
+      [],
+      (state) => {
+        if (state && relayStatus.status != state && !(state == "Done" && (relayStatus.status == "Auth Fail" || relayStatus.status == "Error"))) {
+          relayStatus.status = state
+          displayRelayStatus(uiBox, relay, relayStatus)
+        }
+      },
+      (event) => { 
+        relayStatus.count = relayStatus.count + 1
+
+        displayRelayStatus(uiBox, relay, relayStatus)
+
+        // prevent duplicated events
+        if (events[event.id]) return
+        else events[event.id] = event
+
+        // show how many events were found until this moment
+        $('#events-found').text(`${Object.keys(events).length} events found`)
+      }, 
+      (eventId, inserted, message) => {}, 
+      (newFilter) => { 
+        if (newFilter.until && relayStatus.until != newFilter.until) {
+          relayStatus.until = newFilter.until
+          displayRelayStatus(uiBox, relay, relayStatus)
+        }
+      }
+    )
+}
+
+function sendToRelay(relay, eventsToSend, uiBox) {
+  let relayStatus = {
+    count: 0
+  }
+
+  return openRelay(
+      relay, 
+      [],
+      eventsToSend,
+      (state) => {
+        if (state && relayStatus.status != state && !(state == "Done" && (relayStatus.status == "Auth Fail" || relayStatus.status == "Error"))) {
+          relayStatus.status = state
+          displayRelayStatus(uiBox, relay, relayStatus)
+        }
+      },
+      (event) => {}, 
+      (eventId, inserted, message) => { 
+        if (inserted == true) {
+          relayStatus.count = relayStatus.count + 1
+
+          if (message && relayStatus.message != message) {
+            relayStatus.message = message
+          }
+
+          displayRelayStatus(uiBox, relay, relayStatus)
+        } else {
+          if (message && relayStatus.message != message) {
+            relayStatus.message = message
+          }
+
+          displayRelayStatus(uiBox, relay, relayStatus)
+        }
+      }, 
+      (newFilter) => {}
+    )
 }
