@@ -67,6 +67,8 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
 
       // Listen for messages
       ws.onmessage = (str) => {
+        console.log("Message ", str.data)
+
         const messageArray = JSON.parse(str.data)
         const [msgType] = messageArray
 
@@ -162,7 +164,6 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         }
 
         if (msgType === 'EOSE') {
-          console.log("EOSE ", str.data)
           const subState = subscriptions[messageArray[1]]
 
           // if trully finished
