@@ -129,7 +129,7 @@ const fetchAndBroadcast = async () => {
 
   $('#fetching-relays-header-box').css('display', 'flex')
   $('#fetching-relays-box').css('display', 'flex')
-  $('#fetching-relays-header').html("<th>Relay</th><th>Status</th><th>Searching Until</th><th>Events</th><th></th>")
+  $('#fetching-relays-header').html("<th>Relay</th><th>Status</th><th>Batch Until</th><th>Events</th><th></th>")
 
   // get all events from relays
   let filterObj = JSON.parse(filter)
