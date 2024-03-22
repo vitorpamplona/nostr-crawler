@@ -16,7 +16,7 @@ function matchFilter(filter, event) {
     }
   
     if (filter.since && event.created_at < filter.since) return false
-    if (filter.until && event.created_at >= filter.until) return false
+    if (filter.until && event.created_at > filter.until) return false
   
     return true
   }
