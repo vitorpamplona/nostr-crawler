@@ -1,198 +1,34 @@
 // fetch events from relay, returns a promise
-const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox, updateRelayStatus) =>
-  new Promise((resolve, reject) => {
-    try {
-      updateRelayStatus(uiBox, relay, "Starting", 0, undefined, undefined, undefined, relayStatus)
-      // open websocket
-      const ws = new WebSocket(relay)
+function fetchFromRelay(relay, filters, events, relayStatus, uiBox, updateRelayStatus) {
+  return openRelay(
+      relay, 
+      filters,
+      [],
+      (state) => {
+        updateRelayStatus(uiBox, relay, state, 0, undefined, undefined, undefined, relayStatus) 
+      },
+      (event) => { 
+        updateRelayStatus(uiBox, relay, undefined, 1, undefined, undefined, undefined, relayStatus)
 
-      let isAuthenticating = false
+        // prevent duplicated events
+        if (events[event.id]) return
+        else events[event.id] = event
 
-      // prevent hanging forever
-      let myTimeout = setTimeout(() => {
-        ws.close()
-        reject(relay)
-      }, 10_000)
-
-      const subscriptions = Object.fromEntries(filters.map ( (filter, index) => {
-        let id = "MYSUB"+index
-
-        let myFilter = filter
-
-        return [ 
-          id, {
-            id: id,
-            counter: 0,
-            eoseSessionCounter: 0,
-            lastEvent: null,
-            done: false,
-            filter: myFilter,
-            eventIds: new Set()
-          }
-        ]
-      }))
-      
-      // subscribe to events filtered by author
-      ws.onopen = () => {
-        clearTimeout(myTimeout)
-        myTimeout = setTimeout(() => {
-          ws.close()
-          reject(relay)
-        }, 10_000)
-        updateRelayStatus(uiBox, relay, "Downloading", 0, undefined, undefined, undefined, relayStatus)
-        
-        for (const [key, sub] of Object.entries(subscriptions)) {
-          ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
+        // show how many events were found until this moment
+        $('#events-found').text(`${Object.keys(events).length} events found`)
+      }, 
+      (eventId, inserted, message) => { 
+        if (inserted == true) {
+          updateRelayStatus(uiBox, relay, undefined, 1, undefined, undefined, message, relayStatus)
+        } else {
+          updateRelayStatus(uiBox, relay, undefined, 0, undefined, undefined, message, relayStatus)
         }
+      }, 
+      (subId, until) => { 
+        updateRelayStatus(uiBox, relay, undefined, 0, subId, until, undefined, relayStatus)
       }
-
-      // Listen for messages
-      ws.onmessage = (event) => {
-        const [msgType, subscriptionId, data] = JSON.parse(event.data)
-        const subState = subscriptions[subscriptionId]
-
-        if (subState == undefined) return
-
-        // event messages
-        if (msgType === 'EVENT') {
-          clearTimeout(myTimeout)
-          myTimeout = setTimeout(() => {
-            ws.close()
-            reject(relay)
-          }, 10_000)
-
-          try { 
-            if (!matchFilter(subState.filter, data)) {
-              console.log("Didn't match filter", data, subState.filter)
-              return
-            }
-
-            if (subState.eventIds.has(data.id)) return
-
-            if (subState.filter.limit && subState.counter >= subState.filter.limit) {
-              subState.done = true
-              updateRelayStatus(uiBox, relay, "Done", 0, undefined, undefined, undefined, relayStatus)
-              ws.close()
-              resolve(relay)
-              return
-            }
-
-            if (!subState.lastEvent || data.created_at < subState.lastEvent.created_at) {
-              subState.lastEvent = data
-            }
-
-            subState.eventIds.add(data.id)
-            subState.counter++
-            subState.eoseSessionCounter++
-
-            let until = undefined
-
-            if (subState.lastEvent) {
-                until = subState.lastEvent.created_at
-            }
-
-            updateRelayStatus(uiBox, relay, undefined, 1, subscriptionId, until, undefined, relayStatus)
-
-            // prevent duplicated events
-            if (events[data.id]) return
-            else events[data.id] = data
-
-            // show how many events were found until this moment
-            $('#events-found').text(`${Object.keys(events).length} events found`)
-          } catch(err) {
-            console.log(err, event)
-            return
-          }
-        }
-
-        // end of subscription messages
-        if (msgType === 'EOSE') {
-          // Restarting the filter is necessary to go around Max Limits for each relay. 
-          if (subState.eoseSessionCounter == 0 || 
-            subState.lastEvent.created_at == 0 || // bug that until becomes undefined
-            (subState.filter.limit != undefined && subState.counter >= subState.filter.limit) ||
-            (subState.filter.until != undefined && subState.filter.until == subState.lastEvent.created_at)
-          ) { 
-            subState.done = true
-            
-            let alldone = Object.values(subscriptions).every(filter => filter.done === true);
-            if (alldone) {
-              updateRelayStatus(uiBox, relay, "Done", 0, undefined, undefined, undefined, relayStatus)
-              ws.close()
-              resolve(relay)
-            }
-          } else {
-            subState.eoseSessionCounter = 0
-            let newFilter = { ...subState.filter }
-            newFilter.until = subState.lastEvent.created_at
-
-            ws.send(JSON.stringify(['REQ', subState.id, newFilter]))
-          }
-        }
-
-        if (msgType === 'AUTH') {
-          isAuthenticating = true
-          signNostrAuthEvent(relay, subscriptionId).then(
-            (event) => {
-              if (event) {
-                ws.send(JSON.stringify(['AUTH', event]))
-              } else {
-                updateRelayStatus(uiBox, relay, "AUTH Req", 0, undefined, undefined, undefined, relayStatus)
-                ws.close()
-                reject(relay)
-              }
-            },
-            (reason) => {
-              updateRelayStatus(uiBox, relay, "AUTH Req", 0, undefined, undefined, undefined, relayStatus)
-              ws.close()
-              reject(relay)
-            },
-          ) 
-        }
-
-        if (msgType === 'CLOSED' && !isAuthenticating) {
-          subState.done = true
-        
-          let alldone = Object.values(subscriptions).every(filter => filter.done === true);
-          if (alldone) {
-            updateRelayStatus(uiBox, relay, "Done", 0, undefined, undefined, undefined, relayStatus)
-            ws.close()
-            resolve(relay)
-          }
-        }
-
-        if (msgType === 'OK') {
-          isAuthenticating = false
-          // auth ok.
-          for (const [key, sub] of Object.entries(subscriptions)) {
-            ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
-          }
-        }
-      }
-      ws.onerror = (err) => {
-        updateRelayStatus(uiBox, relay, "Done", 0, undefined, undefined, undefined, relayStatus)
-        try {
-          ws.close()
-          reject(relay)
-        } catch {
-          reject(relay)
-        }
-      }
-      ws.onclose = (socket, event) => {
-        updateRelayStatus(uiBox, relay, "Done", 0,undefined, undefined, undefined, relayStatus)
-        resolve(relay)
-      }
-    } catch (exception) {
-      console.log(exception)
-      updateRelayStatus(uiBox, relay, "Error", 0,undefined, undefined, undefined, relayStatus)
-      try {
-        ws.close()
-      } catch (exception) {
-      }
-      
-      reject(relay)
-    }
-  })
+    )
+}
 
 // query relays for events published by this pubkey
 const getEvents = async (filters, relaySet, uiBox, updateRelayStatus) => {
@@ -211,102 +47,235 @@ const broadcastEvents = async (data, relaySet, uiBox, updateRelayStatus) => {
   await processInPool(relaySet, (relay, poolStatus) => sendToRelay(relay, data, poolStatus, uiBox, updateRelayStatus), 10, (progress) => $('#broadcasting-progress').val(progress))
 }
 
-const sendAllEvents = async (relay, data, relayStatus, ws) => {
-  console.log("Sending:", data.length, " events")
-  for (evnt of data) {
-    ws.send(JSON.stringify(['EVENT', evnt]))
-  }
+function sendToRelay(relay, eventsToSend, relayStatus, uiBox, updateRelayStatus) {
+  return openRelay(
+      relay, 
+      [],
+      eventsToSend,
+      (state) => {
+        updateRelayStatus(uiBox, relay, state, 0, undefined, undefined, undefined, relayStatus) 
+      },
+      (event) => {}, 
+      (eventId, inserted, message) => { 
+        if (inserted == true) {
+          updateRelayStatus(uiBox, relay, undefined, 1, undefined, undefined, message, relayStatus)
+        } else {
+          updateRelayStatus(uiBox, relay, undefined, 0, undefined, undefined, message, relayStatus)
+        }
+      }, 
+      (subId, until) => {}
+    )
 }
 
 // send events to a relay, returns a promisse
-const sendToRelay = async (relay, data, relayStatus, uiBox, updateRelayStatus) =>
-  new Promise((resolve, reject) => {
+function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onNewUntil) {
+  return new Promise((resolve, reject) => {
     try {
       const ws = new WebSocket(relay)
+      let isAuthenticating = false
 
-      updateRelayStatus(uiBox, relay, "Starting", 0,undefined, undefined, undefined, relayStatus)
+      onState("Starting")
 
       // prevent hanging forever
-      let myTimeout = setTimeout(() => {
-        ws.close()
-        reject('timeout')
-      }, 10_000)
+      let myTimeout = setTimeout(() => { ws.close(); onState("Timeout"); reject(relay) }, 10_000)
 
-      // fetch events from relay
-      ws.onopen = () => {
-        updateRelayStatus(uiBox, relay, "Sending", 0, undefined, undefined, undefined, relayStatus)
-
-        clearTimeout(myTimeout)
-        myTimeout = setTimeout(() => {
-          ws.close()
-          reject('timeout')
-        }, 10_000)
-
-        sendAllEvents(relay, data, relayStatus, ws)
-      }
-      // Listen for messages
-      ws.onmessage = (event) => {
-        clearTimeout(myTimeout)
-        myTimeout = setTimeout(() => {
-          ws.close()
-          reject('timeout')
-        }, 10_000)
-
-        console.log(event.data)
-
-        const [msgType, subscriptionId, inserted, message] = JSON.parse(event.data)
-        // event messages
-        // end of subscription messages
-        if (msgType === 'OK') {
-          if (inserted == true) {
-            updateRelayStatus(uiBox, relay, undefined, 1, undefined, undefined, message, relayStatus)
-          } else {
-            updateRelayStatus(uiBox, relay, undefined, 0,undefined, undefined, message, relayStatus)
-            //console.log(relay, event.data)
+      const subscriptions = Object.fromEntries(filters.map ( (filter, index) => {
+        let id = "MYSUB"+index
+        return [ 
+          id, {
+            id: id,
+            counter: 0,
+            eoseSessionCounter: 0,
+            lastEvent: null,
+            done: false,
+            filter: filter,
+            eventIds: new Set()
           }
-        } else {
-          console.log(relay, event.data)
+        ]
+      }))
+
+      // connected
+      ws.onopen = () => {
+        // resets the timeout
+        clearTimeout(myTimeout)
+        myTimeout = setTimeout(() => { ws.close(); onState("Timeout");  reject(relay) }, 10_000)
+
+        if (Object.keys(subscriptions).length > 0) {
+          onState("Downloading")
+          for (const [key, sub] of Object.entries(subscriptions)) {
+            ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
+          }
         }
 
+        if (eventsToSend && eventsToSend.length > 0) {
+          for (evnt of eventsToSend) {
+            ws.send(JSON.stringify(['EVENT', evnt]))
+          }
+        }
+      }
+
+      // Listen for messages
+      ws.onmessage = (str) => {
+        const messageArray = JSON.parse(str.data)
+        const [msgType] = messageArray
+
         if (msgType === 'AUTH') {
-          signNostrAuthEvent(relay, subscriptionId).then(
+          // resets the timeout
+          clearTimeout(myTimeout)
+          myTimeout = setTimeout(() => { ws.close(); onState("Timeout"); reject(relay) }, 10_000)
+
+          isAuthenticating = true
+          signNostrAuthEvent(relay, messageArray[1]).then(
             (event) => {
               if (event) {
                 ws.send(JSON.stringify(['AUTH', event]))
               } else {
-                updateRelayStatus(uiBox, relay, "AUTH Req", 0,undefined, undefined, undefined, relayStatus)
+                onState("AUTH Fail")
                 ws.close()
+                clearTimeout(myTimeout)
                 reject(relay)
               }
             },
             (reason) => {
-              updateRelayStatus(uiBox, relay, "AUTH Req", 0, undefined, undefined, undefined, relayStatus)
+              onState("AUTH Fail")
               ws.close()
+              clearTimeout(myTimeout)
               reject(relay)
             },
           ) 
         }
+
+        if (msgType === 'OK') {
+          // resets the timeout
+          clearTimeout(myTimeout)
+          myTimeout = setTimeout(() => { ws.close(); onState("Timeout");  reject(relay) }, 10_000)
+          
+          if (isAuthenticating) {
+            isAuthenticating = false
+            if (messageArray[2]) {
+              onState("AUTH Ok")
+
+              // Refresh filters
+              for (const [key, sub] of Object.entries(subscriptions)) {
+                ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
+              }
+            } else {
+              onState("AUTH Fail")
+            }
+          } else {
+            onOk(messageArray[1], messageArray[2], messageArray[3])
+          }
+        } 
+
+        // event messages
+        if (msgType === 'EVENT') {
+          clearTimeout(myTimeout)
+          myTimeout = setTimeout(() => { ws.close(); onState("Timeout"); reject(relay) }, 10_000)
+
+          const subState = subscriptions[messageArray[1]]
+          const event = messageArray[2]
+
+          try { 
+            if (!matchFilter(subState.filter, event)) {
+              console.log("Didn't match filter", event, subState.filter)
+              return
+            }
+
+            if (subState.eventIds.has(event.id)) return
+
+            if (subState.filter.limit && subState.counter >= subState.filter.limit) {
+              subState.done = true
+              onState("Done")
+
+              ws.close()
+              clearTimeout(myTimeout)
+              resolve(relay)
+              return
+            }
+
+            if (!subState.lastEvent || event.created_at < subState.lastEvent.created_at) {
+              subState.lastEvent = event
+            }
+
+            subState.eventIds.add(event.id)
+            subState.counter++
+            subState.eoseSessionCounter++
+
+            onNewEvent(event)
+          } catch(err) {
+            console.log("Minor Error", relay, err, event)
+            return
+          }
+        }
+
+        if (msgType === 'EOSE') {
+          const subState = subscriptions[messageArray[1]]
+
+          // if trully finished
+          if (subState.eoseSessionCounter == 0 || 
+            subState.lastEvent.created_at == 0 || // bug that until becomes undefined
+            (subState.filter.limit != undefined && subState.counter >= subState.filter.limit) ||
+            (subState.filter.until != undefined && subState.filter.until == subState.lastEvent.created_at)
+          ) { 
+            subState.done = true
+            
+            let alldone = Object.values(subscriptions).every(filter => filter.done === true);
+            if (alldone) {
+              onState("Done")
+              ws.close()
+              clearTimeout(myTimeout)
+              resolve(relay)
+            }
+          } else {
+            // Restarting the filter is necessary to go around Max Limits for each relay. 
+
+            subState.eoseSessionCounter = 0
+            let newFilter = { ...subState.filter }
+            newFilter.until = subState.lastEvent.created_at
+
+            ws.send(JSON.stringify(['REQ', subState.id, newFilter]))
+
+            onNewUntil(messageArray[1], newFilter.until)
+          }
+        }
+
+        if (msgType === 'CLOSED') {
+          subState.done = true
+        
+          let alldone = Object.values(subscriptions).every(filter => filter.done === true);
+          if (alldone) {
+            onState("Done")
+            ws.close()
+            clearTimeout(myTimeout)
+            resolve(relay)
+          }
+        }
       }
-      ws.onerror = (err) => {
-        updateRelayStatus(uiBox, relay, "Error", 0, undefined, undefined, undefined, relayStatus)
-        console.log("Error", err)
+      ws.onerror = (err, event) => {
+        onState("Error")
+        //console.log("WS Error", relay, err, event)
+        clearTimeout(myTimeout)
         ws.close()
         reject(err)
       }
-      ws.onclose = (socket, event) => {
-        updateRelayStatus(uiBox, relay, "Done", 0, undefined, undefined, undefined, relayStatus)
+      ws.onclose = (event) => {
+        onState("Done")
+        //console.log("WS Close", relay, event)
+        clearTimeout(myTimeout)
         resolve()
       }
     } catch (exception) {
-      console.log(exception)
-      updateRelayStatus(uiBox, relay, "Error", 0, undefined, undefined, undefined, relayStatus)
+      console.log("Major", relay, exception)
+      onState("Error")
       try {
         ws.close()
       } catch (exception) {
       }
+      clearTimeout(myTimeout)
       reject(exception)
     }
   })
+}  
 
 async function signNostrAuthEvent(relay, auth_challenge) {
   let event = {
