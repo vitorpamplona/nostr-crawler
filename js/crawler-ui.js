@@ -67,13 +67,13 @@ const fetchAndBroadcast = async () => {
   const endDate = Date.parse($('#endDate').val())
 
   if ($('#activeDates')[0].checked) {
-    filterObj = { ...filterObj,
-      since: Math.floor((startDate - startDate % 864e5) / 1000) + offset, // 0:00
-      until: Math.floor((endDate - endDate % 864e5 + 864e5 - 1) / 1000) + offset // 23:59
+    for (const filter of filterObj) {
+      filter.since = Math.floor((startDate - startDate % 864e5) / 1000) + offset, // 0:00
+      filter.until = Math.floor((endDate - endDate % 864e5 + 864e5 - 1) / 1000) + offset // 23:59
     }
   }
 
-  const data = (await getEvents([filterObj], relaySet, "fetching-relays")).sort((a, b) => b.created_at - a.created_at)
+  const data = (await getEvents(filterObj, relaySet, "fetching-relays")).sort((a, b) => b.created_at - a.created_at)
 
   // inform user fetching is done
   $('#fetching-status').html(txt.fetching + checkMark)

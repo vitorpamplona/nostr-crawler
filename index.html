@@ -63,14 +63,24 @@
 
             <div class="space-between-small-left" style="width:100%;">
               <textarea type="text" id="filter" name="filter" class="cool-field-small" onchange="filterOnChange()"
-                rows="10" style="width:100%; resize:vertical; max-width: 100%;" placeholder="{}" required>{
-  "ids":[],
-  "authors":[],
-  "kinds":[],
-  "#e":[],
-  "#p":[],
-  "limit":200
-}</textarea>
+                rows="20" style="width:100%; resize:vertical; max-width: 100%;" placeholder="{}" required>[
+  {
+    "ids":[],
+    "authors":["460c25e682fda7832b52d1f22d3d22b3176d972f60dcdc3212ed8c92ef85065c"],
+    "kinds":[],
+    "#e":[],
+    "#p":[],
+    "limit":200
+  }, 
+  {
+    "ids":[],
+    "authors":[],
+    "kinds":[],
+    "#e":[],
+    "#p":["460c25e682fda7832b52d1f22d3d22b3176d972f60dcdc3212ed8c92ef85065c"],
+    "limit":200
+  }
+]</textarea>
             </div>
             <div class="space-between-small-left" style="width:100%;">
               <p id="filter-error"></p>
