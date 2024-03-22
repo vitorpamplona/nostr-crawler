@@ -182,6 +182,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
             subState.eoseSessionCounter = 0
             subState.filter.until = subState.lastEvent.created_at - 1
 
+            ws.send(JSON.stringify(["CLOSE", subState.id]))
             ws.send(JSON.stringify(['REQ', subState.id, subState.filter]))
 
             onFilterChange(subState.filter)
