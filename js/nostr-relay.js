@@ -1,98 +1,5 @@
-const parseRelaySet = (commaSeparatedRelayString, defaultSet) => {
-  let list = commaSeparatedRelayString.split(",")
-  
-  if (list && list.length > 0 && list[0] !== "") 
-    return list.map((it) => it.trim())
-  else 
-    return defaultSet
-}
-
-// download js file
-const downloadFile = (data, fileName) => {
-  const prettyJs = JSON.stringify(data, null, 2)
-  const tempLink = document.createElement('a')
-  const taBlob = new Blob([prettyJs], { type: 'text/json' })
-  tempLink.setAttribute('href', URL.createObjectURL(taBlob))
-  tempLink.setAttribute('download', fileName)
-  tempLink.click()
-}
-
-const updateRelayStatus = (uiBox, relay, status, addToCount, subscription, until, message, relayStatusAndCount) => {
-  if (relayStatusAndCount[relay] == undefined) {
-    relayStatusAndCount[relay] = {}
-  }
-
-  let changedStatus = false
-  if (status && relayStatusAndCount[relay].status != status) {
-    changedStatus = true
-    relayStatusAndCount[relay].status = status
-  }
-
-  if (!relayStatusAndCount[relay].until) {
-    relayStatusAndCount[relay].until = {}
-  }
-
-  if (subscription) {
-    relayStatusAndCount[relay].until[subscription] = until
-    changedStatus = true
-  }
-
-  if (message)
-    relayStatusAndCount[relay].message = message
-
-  if (relayStatusAndCount[relay].count != undefined) 
-    relayStatusAndCount[relay].count = relayStatusAndCount[relay].count + addToCount
-  else 
-    relayStatusAndCount[relay].count = addToCount
-
-  if (changedStatus)  
-    displayRelayStatus(uiBox, relayStatusAndCount)
-}
-
-const displayRelayStatus = (uiBox, relayStatusAndCount) => {
-  if (Object.keys(relayStatusAndCount).length > 0) {
-    Object.keys(relayStatusAndCount).forEach(
-      it => {
-        let untilStr = "";
-
-        if (relayStatusAndCount[it].until) {
-          if (relayStatusAndCount[it].until["MYSUB0"])
-            untilStr += "<td> <" + new Date(relayStatusAndCount[it].until["MYSUB0"] * 1000).toLocaleDateString("en-US") + "</td>"
-          else
-            untilStr += "<td> </td>"
-        } else {
-          untilStr += "<td> </td>"
-        }
-
-        let msg = ""
-
-        if (relayStatusAndCount[it].message)
-          msg = relayStatusAndCount[it].message
-          
-        const relayName = it.replace("wss://", "").replace("ws://", "").split("#")[0].split("?")[0].split("/")[0]
-        const line = "<td>" + relayName + "</td><td>" + relayStatusAndCount[it].status + "</td>" + untilStr + "<td>" + relayStatusAndCount[it].count + "</td><td>" + msg + "</td>"
-
-        const elemId = uiBox+relayName.replaceAll(".", "").replaceAll("/", "").replaceAll("-", "").replaceAll(":", "").replaceAll("%", "").replaceAll("⬤ ", "").replaceAll(" ", "").replaceAll("@", "").replaceAll("	", "")
-
-        if (elemId.trim() !== "") { 
-          if ($('#' + elemId).length > 0) {
-            $('#' + elemId).html(line)
-          } else {
-            $('#'+uiBox).append(
-              $("<tr>" +line+ "</tr>").attr('id', elemId)
-            )
-          }
-        }
-      }
-    )
-  } else {
-    $('#'+uiBox+'-header').html("")
-    $('#'+uiBox).html("<tr id=\""+uiBox+"-header\"></tr>")
-  }
-}
-
 // fetch events from relay, returns a promise
-const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
+const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox, updateRelayStatus) =>
   new Promise((resolve, reject) => {
     try {
       updateRelayStatus(uiBox, relay, "Starting", 0, undefined, undefined, undefined, relayStatus)
@@ -116,6 +23,7 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
           id, {
             id: id,
             counter: 0,
+            eoseSessionCounter: 0,
             lastEvent: null,
             done: false,
             filter: myFilter,
@@ -141,6 +49,10 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
       // Listen for messages
       ws.onmessage = (event) => {
         const [msgType, subscriptionId, data] = JSON.parse(event.data)
+        const subState = subscriptions[subscriptionId]
+
+        if (subState == undefined) return
+
         // event messages
         if (msgType === 'EVENT') {
           clearTimeout(myTimeout)
@@ -150,30 +62,40 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
           }, 10_000)
 
           try { 
-            const { id } = data
-
-            //console.log(data)
-
-            if (!subscriptions[subscriptionId].lastEvent || data.created_at < subscriptions[subscriptionId].lastEvent.created_at) {
-              subscriptions[subscriptionId].lastEvent = data
+            if (!matchFilter(subState.filter, data)) {
+              console.log("Didn't match filter", data, subState.filter)
+              return
             }
 
-            if (data.id in subscriptions[subscriptionId].eventIds) return
+            if (subState.eventIds.has(data.id)) return
 
-            subscriptions[subscriptionId].eventIds.add(data.id)
-            subscriptions[subscriptionId].counter++
+            if (subState.filter.limit && subState.counter >= subState.filter.limit) {
+              subState.done = true
+              updateRelayStatus(uiBox, relay, "Done", 0, undefined, undefined, undefined, relayStatus)
+              ws.close()
+              resolve(relay)
+              return
+            }
+
+            if (!subState.lastEvent || data.created_at < subState.lastEvent.created_at) {
+              subState.lastEvent = data
+            }
+
+            subState.eventIds.add(data.id)
+            subState.counter++
+            subState.eoseSessionCounter++
 
             let until = undefined
 
-            if (subscriptions[subscriptionId].lastEvent) {
-                until = subscriptions[subscriptionId].lastEvent.created_at
+            if (subState.lastEvent) {
+                until = subState.lastEvent.created_at
             }
 
             updateRelayStatus(uiBox, relay, undefined, 1, subscriptionId, until, undefined, relayStatus)
 
             // prevent duplicated events
-            if (events[id]) return
-            else events[id] = data
+            if (events[data.id]) return
+            else events[data.id] = data
 
             // show how many events were found until this moment
             $('#events-found').text(`${Object.keys(events).length} events found`)
@@ -186,8 +108,12 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
         // end of subscription messages
         if (msgType === 'EOSE') {
           // Restarting the filter is necessary to go around Max Limits for each relay. 
-          if (subscriptions[subscriptionId].counter < 2 || (subscriptions[subscriptionId].filter.until != undefined && subscriptions[subscriptionId].filter.until == subscriptions[subscriptionId].lastEvent.created_at)) { 
-            subscriptions[subscriptionId].done = true
+          if (subState.eoseSessionCounter == 0 || 
+            subState.lastEvent.created_at == 0 || // bug that until becomes undefined
+            (subState.filter.limit != undefined && subState.counter >= subState.filter.limit) ||
+            (subState.filter.until != undefined && subState.filter.until == subState.lastEvent.created_at)
+          ) { 
+            subState.done = true
             
             let alldone = Object.values(subscriptions).every(filter => filter.done === true);
             if (alldone) {
@@ -196,13 +122,11 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
               resolve(relay)
             }
           } else {
-            subscriptions[subscriptionId].counter = 0
-            let newFilter = { ...subscriptions[subscriptionId].filter }
-            newFilter.until = subscriptions[subscriptionId].lastEvent.created_at
+            subState.eoseSessionCounter = 0
+            let newFilter = { ...subState.filter }
+            newFilter.until = subState.lastEvent.created_at
 
-            //console.log(JSON.stringify(['REQ', subscriptions[subscriptionId].id, JSON.stringify(newFilter)]))
-
-            ws.send(JSON.stringify(['REQ', subscriptions[subscriptionId].id, JSON.stringify(newFilter)]))
+            ws.send(JSON.stringify(['REQ', subState.id, newFilter]))
           }
         }
 
@@ -227,7 +151,7 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
         }
 
         if (msgType === 'CLOSED' && !isAuthenticating) {
-          subscriptions[subscriptionId].done = true
+          subState.done = true
         
           let alldone = Object.values(subscriptions).every(filter => filter.done === true);
           if (alldone) {
@@ -271,48 +195,20 @@ const fetchFromRelay = async (relay, filters, events, relayStatus, uiBox) =>
   })
 
 // query relays for events published by this pubkey
-const getEvents = async (filters, relaySet, uiBox) => {
+const getEvents = async (filters, relaySet, uiBox, updateRelayStatus) => {
   // events hash
   const events = {}
 
   // batch processing of 10 relays
-  await processInPool(relaySet, (relay, poolStatus) => fetchFromRelay(relay, filters, events, poolStatus, uiBox), 10, (progress) => $('#fetching-progress').val(progress))
+  await processInPool(relaySet, (relay, poolStatus) => fetchFromRelay(relay, filters, events, poolStatus, uiBox, updateRelayStatus), 10, (progress) => $('#fetching-progress').val(progress))
 
   // return data as an array of events
   return Object.keys(events).map((id) => events[id])
 }
 
 // broadcast events to list of relays
-const broadcastEvents = async (data, relaySet, uiBox) => {
-  await processInPool(relaySet, (relay, poolStatus) => sendToRelay(relay, data, poolStatus, uiBox), 10, (progress) => $('#broadcasting-progress').val(progress))
-}
-
-const processInPool = async (items, processItem, poolSize, onProgress) => {
-  let pool = {};
-  let poolStatus = {}
-  let remaining = [...items]
-  
-  while (remaining.length) {
-    let processing = remaining.splice(0, 1)
-    let item = processing[0]
-    pool[item] = processItem(item, poolStatus);
-      
-    if (Object.keys(pool).length > poolSize - 1) {
-      try {
-        const resolvedId = await Promise.race(Object.values(pool)); // wait for one Promise to finish
-
-        delete pool[resolvedId]; // remove that Promise from the pool
-      } catch (resolvedId) {
-        delete pool[resolvedId]; // remove that Promise from the pool
-      }
-    }
-
-    onProgress(items.length - remaining.length)
-  }
-
-  await Promise.allSettled(Object.values(pool));
-
-  return poolStatus
+const broadcastEvents = async (data, relaySet, uiBox, updateRelayStatus) => {
+  await processInPool(relaySet, (relay, poolStatus) => sendToRelay(relay, data, poolStatus, uiBox, updateRelayStatus), 10, (progress) => $('#broadcasting-progress').val(progress))
 }
 
 const sendAllEvents = async (relay, data, relayStatus, ws) => {
@@ -323,7 +219,7 @@ const sendAllEvents = async (relay, data, relayStatus, ws) => {
 }
 
 // send events to a relay, returns a promisse
-const sendToRelay = async (relay, data, relayStatus, uiBox) =>
+const sendToRelay = async (relay, data, relayStatus, uiBox, updateRelayStatus) =>
   new Promise((resolve, reject) => {
     try {
       const ws = new WebSocket(relay)
@@ -412,58 +308,15 @@ const sendToRelay = async (relay, data, relayStatus, uiBox) =>
     }
   })
 
-async function generateNostrEventId(msg) {
-  const digest = [
-      0,
-      msg.pubkey,
-      msg.created_at,
-      msg.kind,
-      msg.tags,
-      msg.content,
-  ];
-  const digest_str = JSON.stringify(digest);
-  const hash = await sha256Hex(digest_str);
-
-  return hash;
-}
-
-function sha256Hex(string) {
-  const utf8 = new TextEncoder().encode(string);
-
-  return crypto.subtle.digest('SHA-256', utf8).then((hashBuffer) => {
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray
-        .map((bytes) => bytes.toString(16).padStart(2, '0'))
-        .join('');
-
-      return hashHex;
-  });
-}
-
 async function signNostrAuthEvent(relay, auth_challenge) {
-  try {
-    let msg = {
-        kind: 22242, 
-        content: "",
-        tags: [
-          ["relay", relay],
-          ["challenge", auth_challenge]
-        ],
-    };
+  let event = {
+    kind: 22242, 
+    content: "",
+    tags: [
+      ["relay", relay],
+      ["challenge", auth_challenge]
+    ],
+  };
 
-    // set msg fields
-    msg.created_at = Math.floor((new Date()).getTime() / 1000);
-    msg.pubkey = await window.nostr.getPublicKey();
-
-    // Generate event id
-    msg.id = await generateNostrEventId(msg);
-
-    // Sign event
-    signed_msg = await window.nostr.signEvent(msg);
-  } catch (e) {
-    console.log("Failed to sign message with browser extension", e);
-    return undefined;
-  }
-
-  return signed_msg;
+  return await nostrSign(event)
 }

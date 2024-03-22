@@ -1,3 +1,100 @@
+const parseRelaySet = (commaSeparatedRelayString, defaultSet) => {
+  let list = commaSeparatedRelayString.split(",")
+  
+  if (list && list.length > 0 && list[0] !== "") 
+    return list.map((it) => it.trim())
+  else 
+    return defaultSet
+}
+
+// download js file
+const downloadFile = (data, fileName) => {
+  const prettyJs = JSON.stringify(data, null, 2)
+  const tempLink = document.createElement('a')
+  const taBlob = new Blob([prettyJs], { type: 'text/json' })
+  tempLink.setAttribute('href', URL.createObjectURL(taBlob))
+  tempLink.setAttribute('download', fileName)
+  tempLink.click()
+}
+
+const updateRelayStatus = (uiBox, relay, status, addToCount, subscription, until, message, relayStatusAndCount) => {
+  if (relayStatusAndCount[relay] == undefined) {
+    relayStatusAndCount[relay] = {}
+  }
+
+  let changedStatus = false
+  if (status && relayStatusAndCount[relay].status != status) {
+    changedStatus = true
+    relayStatusAndCount[relay].status = status
+  }
+
+  if (!relayStatusAndCount[relay].until) {
+    relayStatusAndCount[relay].until = {}
+  }
+
+  if (subscription) {
+    relayStatusAndCount[relay].until[subscription] = until
+    changedStatus = true
+  }
+
+  if (message)
+    relayStatusAndCount[relay].message = message
+
+  if (relayStatusAndCount[relay].count != undefined) 
+    relayStatusAndCount[relay].count = relayStatusAndCount[relay].count + addToCount
+  else 
+    relayStatusAndCount[relay].count = addToCount
+
+  if (changedStatus)  
+    displayRelayStatus(uiBox, relay, relayStatusAndCount[relay])
+}
+
+const displayAllRelayStatuses = (uiBox, relayStatusAndCount) => {
+  if (Object.keys(relayStatusAndCount).length > 0) {
+    Object.keys(relayStatusAndCount).forEach( it => {
+        displayRelayStatus(uiBox, it, relayStatusAndCount[it])
+      }
+    )
+  } else {
+    $('#'+uiBox+'-header').html("")
+    $('#'+uiBox).html("<tr id=\""+uiBox+"-header\"></tr>")
+  }
+}
+
+function displayRelayStatus(uiBoxPrefix, relay, relaySatus) {
+  let untilStr = "";
+
+  if (relaySatus.until) {
+    // shows only the first sub
+    if (relaySatus.until["MYSUB0"])
+      untilStr += "<td> <" + new Date(relaySatus.until["MYSUB0"] * 1000).toLocaleDateString("en-US") + "</td>"
+    else
+      untilStr += "<td> </td>"
+  } else {
+    untilStr += "<td> </td>"
+  }
+
+  let msg = ""
+
+  if (relaySatus.message)
+    msg = relaySatus.message
+    
+  const relayName = relay.replace("wss://", "").replace("ws://", "").split("#")[0].split("?")[0].split("/")[0]
+  const line = "<td>" + relayName + "</td><td>" + relaySatus.status + "</td>" + untilStr + "<td>" + relaySatus.count + "</td><td>" + msg + "</td>"
+
+  const elemId = uiBoxPrefix+relayName.replaceAll(".", "").replaceAll("/", "").replaceAll("-", "").replaceAll(":", "").replaceAll("%", "").replaceAll("⬤ ", "").replaceAll(" ", "").replaceAll("@", "").replaceAll("	", "")
+
+  if (elemId.trim() !== "") { 
+    if ($('#' + elemId).length > 0) {
+      $('#' + elemId).html(line)
+    } else {
+      $('#'+uiBoxPrefix).append(
+        $("<tr>" +line+ "</tr>").attr('id', elemId)
+      )
+    }
+  }
+}
+
 // button click handler
 const fetchAndBroadcast = async () => {
   // reset UI
@@ -50,7 +147,7 @@ const fetchAndBroadcast = async () => {
     }
   }
 
-  const data = (await getEvents([filterObj], relaySet, "fetching-relays")).sort((a, b) => b.created_at - a.created_at)
+  const data = (await getEvents([filterObj], relaySet, "fetching-relays", updateRelayStatus)).sort((a, b) => b.created_at - a.created_at)
 
   // inform user fetching is done
   $('#fetching-status').html(txt.fetching + checkMark)
@@ -79,7 +176,7 @@ const fetchAndBroadcast = async () => {
     $('#broadcasting-relays-box').css('display', 'flex')
     $('#broadcasting-relays-header').html("<th>Relay</th><th>Status</th><th></th><th>Events</th><th>Message</th>")
   
-    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays")
+    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays", updateRelayStatus)
 
     $('#broadcasting-progress').val(relaySetBroadcast.length)
   }
@@ -155,7 +252,7 @@ const broadcast = async (data) => {
     $('#broadcasting-relays-box').css('display', 'flex')
     $('#broadcasting-relays-header').html("<th>Relay</th><th>Status</th><th></th><th></th><th>Events</th><th>Message</th>")
 
-    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays")
+    await broadcastEvents(data, relaySetBroadcast, "broadcasting-relays", updateRelayStatus)
 
     // re-enable broadcast button
     $('#fetch-and-broadcast').prop('disabled', false)
