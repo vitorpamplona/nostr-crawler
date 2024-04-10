@@ -189,11 +189,13 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         }
 
         if (msgType === 'CLOSED') {
+          const subState = subscriptions[messageArray[1]]
+
           subState.done = true
         
           let alldone = Object.values(subscriptions).every(filter => filter.done === true);
           if (alldone) {
-            onState("Done")
+            onState("Closed")
             ws.close(); 
             clearTimeout(myTimeout)
             resolve(relay)
