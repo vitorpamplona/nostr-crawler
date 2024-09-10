@@ -24,6 +24,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
       }
       
       let isAuthenticating = false
+      let hasSucessfullyAuthed = false
       let okCounter = 0
 
       onState("Starting")
@@ -44,14 +45,25 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
         ]
       }))
 
-      // connected
-      ws.onopen = () => {
-        resetTimeOut()
+      const delay = (delayInms) => {
+        return new Promise(resolve => setTimeout(resolve, delayInms));
+      };
+
+      const waitAndRun = (delayInms, func) => {
+        return new Promise(resolve => setTimeout(func, delayInms));
+      };
+
+      const sendStuff = async () => {
+        let firstTime = true
 
         if (Object.keys(subscriptions).length > 0) {
           onState("Downloading")
           for (const [key, sub] of Object.entries(subscriptions)) {
             ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
+            if (firstTime) {
+              await delay(100) // waits for the auth process to finish
+              firstTime = false
+            }
           }
         }
 
@@ -59,9 +71,20 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
           onState("Sending")
           for (evnt of eventsToSend) {
             ws.send(JSON.stringify(['EVENT', evnt]))
+            if (firstTime) {
+              await delay(100) // waits for the auth process to finish
+              firstTime = false
+            }
           }
           onState("Sent")
         }
+      }
+
+      // connected
+      ws.onopen = () => {
+        resetTimeOut()
+        console.log("Sending stuff")
+        sendStuff()
       }
 
       // Listen for messages
@@ -102,14 +125,18 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
               onState("Auth Ok")
 
               // Refresh filters
-              for (const [key, sub] of Object.entries(subscriptions)) {
-                ws.send(JSON.stringify(['REQ', sub.id, sub.filter]))
-              }
+              sendStuff()
             } else {
               onState("Auth Fail")
-              clearTimeout(myTimeout)
-              ws.close(); 
-              reject(relay)
+
+              // some relays send a fail before an accept.
+              waitAndRun(4000, () => {
+                if (!hasSucessfullyAuthed) {
+                  clearTimeout(myTimeout)
+                  ws.close(); 
+                  reject(relay)
+                }
+              })
             }
           } else {
             onOk(messageArray[1], messageArray[2], messageArray[3])
