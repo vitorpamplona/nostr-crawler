@@ -83,7 +83,6 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
       // connected
       ws.onopen = () => {
         resetTimeOut()
-        console.log("Sending stuff")
         sendStuff()
       }
 
@@ -158,7 +157,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
           const event = messageArray[2]
 
           try { 
-            if (!matchFilter(subState.filter, event)) {
+            if (!matchFilters(subState.filter, event)) {
               console.log("Didn't match filter", relay, event, subState.filter)
             } else if (subState.eventIds.has(event.id)) {
               console.log("Duplicated", relay, event, subState.filter)
