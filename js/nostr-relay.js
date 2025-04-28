@@ -88,80 +88,79 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
 
       // Listen for messages
       ws.onmessage = (str) => {
-        const messageArray = JSON.parse(str.data)
-        const [msgType] = messageArray
+        try { 
+          const messageArray = JSON.parse(str.data)
+          const [msgType] = messageArray
 
-        if (msgType === 'AUTH') {
-          resetTimeOut()
+          if (msgType === 'AUTH') {
+            resetTimeOut()
 
-          isAuthenticating = true
-          signNostrAuthEvent(relay, messageArray[1]).then(
-            (event) => {
-              if (event) {
-                ws.send(JSON.stringify(['AUTH', event]))
-              } else {
-                onState("Auth Fail")
-                clearTimeout(myTimeout)
-                ws.close(); 
-                reject(relay)
-              }
-            },
-            (reason) => {
-              onState("Auth Fail")
-              clearTimeout(myTimeout)
-              ws.close(); 
-              reject(relay)
-            },
-          ) 
-        }
-
-        if (msgType === 'OK') {
-          resetTimeOut()
-          
-          if (isAuthenticating) {
-            isAuthenticating = false
-            if (messageArray[2]) {
-              onState("Auth Ok")
-
-              // Refresh filters
-              sendStuff()
-            } else {
-              onState("Auth Fail")
-
-              // some relays send a fail before an accept.
-              waitAndRun(4000, () => {
-                if (!hasSucessfullyAuthed) {
+            isAuthenticating = true
+            signNostrAuthEvent(relay, messageArray[1]).then(
+              (event) => {
+                if (event) {
+                  ws.send(JSON.stringify(['AUTH', event]))
+                } else {
+                  onState("Auth Fail")
                   clearTimeout(myTimeout)
                   ws.close(); 
                   reject(relay)
                 }
-              })
-            }
-          } else {
-            onOk(messageArray[1], messageArray[2], messageArray[3])
-            okCounter++
-            if (eventsToSend && eventsToSend.length == okCounter) {
-              onState("Done")
-              ws.close(); 
-              clearTimeout(myTimeout)
-              resolve(relay)
-            }
+              },
+              (reason) => {
+                onState("Auth Fail")
+                clearTimeout(myTimeout)
+                ws.close(); 
+                reject(relay)
+              },
+            ) 
           }
-        } 
 
-        // event messages
-        if (msgType === 'EVENT') {
-          resetTimeOut()
+          if (msgType === 'OK') {
+            resetTimeOut()
+            
+            if (isAuthenticating) {
+              isAuthenticating = false
+              if (messageArray[2]) {
+                onState("Auth Ok")
 
-          const subState = subscriptions[messageArray[1]]
-          const event = messageArray[2]
+                // Refresh filters
+                sendStuff()
+              } else {
+                onState("Auth Fail")
 
-          try { 
-            if (!matchFilters(subState.filter, event)) {
+                // some relays send a fail before an accept.
+                waitAndRun(4000, () => {
+                  if (!hasSucessfullyAuthed) {
+                    clearTimeout(myTimeout)
+                    ws.close(); 
+                    reject(relay)
+                  }
+                })
+              }
+            } else {
+              onOk(messageArray[1], messageArray[2], messageArray[3])
+              okCounter++
+              if (eventsToSend && eventsToSend.length == okCounter) {
+                onState("Done")
+                ws.close(); 
+                clearTimeout(myTimeout)
+                resolve(relay)
+              }
+            }
+          } 
+
+          // event messages
+          if (msgType === 'EVENT') {
+            const subState = subscriptions[messageArray[1]]
+            const event = messageArray[2]
+
+            if (!matchFilter(subState.filter, event)) {
               console.log("Didn't match filter", relay, event, subState.filter)
             } else if (subState.eventIds.has(event.id)) {
               console.log("Duplicated", relay, event, subState.filter)
             } else if (subState.filter.limit && subState.counter >= subState.filter.limit) {
+              resetTimeOut()
               subState.done = true
               onState("Done")
 
@@ -169,6 +168,7 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
               clearTimeout(myTimeout)
               resolve(relay)
             } else {
+              resetTimeOut()
               if (!subState.lastEvent || event.created_at < subState.lastEvent.created_at) {
                 subState.lastEvent = event
               }
@@ -179,53 +179,53 @@ function openRelay(relay, filters, eventsToSend, onState, onNewEvent, onOk, onFi
     
               onNewEvent(event)
             }
-          } catch(err) {
-            console.log("Minor Error", relay, err, event)
           }
-        }
 
-        if (msgType === 'EOSE') {
-          const subState = subscriptions[messageArray[1]]
+          if (msgType === 'EOSE') {
+            const subState = subscriptions[messageArray[1]]
 
-          // if trully finished
-          if (subState.eoseSessionCounter == 0 || 
-            subState.lastEvent.created_at == 0 || // bug that until becomes undefined
-            (subState.filter.limit && subState.counter >= subState.filter.limit) ||
-            (subState.filter.until && subState.filter.until == subState.lastEvent.created_at - 1)
-          ) { 
+            // if trully finished
+            if (subState.eoseSessionCounter == 0 || 
+              subState.lastEvent.created_at == 0 || // bug that until becomes undefined
+              (subState.filter.limit && subState.counter >= subState.filter.limit) ||
+              (subState.filter.until && subState.filter.until == subState.lastEvent.created_at - 1)
+            ) { 
+              subState.done = true
+              
+              let alldone = Object.values(subscriptions).every(filter => filter.done === true);
+              if (alldone) {
+                onState("Done")
+                ws.close(); 
+                clearTimeout(myTimeout)
+                resolve(relay)
+              }
+            } else {
+              // Restarting the filter is necessary to go around Max Limits for each relay. 
+
+              subState.eoseSessionCounter = 0
+              subState.filter.until = subState.lastEvent.created_at - 1
+
+              ws.send(JSON.stringify(['REQ', subState.id, subState.filter]))
+
+              onFilterChange(subState.filter)
+            }
+          }
+
+          if (msgType === 'CLOSED') {
+            const subState = subscriptions[messageArray[1]]
+
             subState.done = true
-            
+          
             let alldone = Object.values(subscriptions).every(filter => filter.done === true);
             if (alldone) {
-              onState("Done")
+              onState("Closed")
               ws.close(); 
               clearTimeout(myTimeout)
               resolve(relay)
             }
-          } else {
-            // Restarting the filter is necessary to go around Max Limits for each relay. 
-
-            subState.eoseSessionCounter = 0
-            subState.filter.until = subState.lastEvent.created_at - 1
-
-            ws.send(JSON.stringify(['REQ', subState.id, subState.filter]))
-
-            onFilterChange(subState.filter)
           }
-        }
-
-        if (msgType === 'CLOSED') {
-          const subState = subscriptions[messageArray[1]]
-
-          subState.done = true
-        
-          let alldone = Object.values(subscriptions).every(filter => filter.done === true);
-          if (alldone) {
-            onState("Closed")
-            ws.close(); 
-            clearTimeout(myTimeout)
-            resolve(relay)
-          }
+        } catch(err) {
+          console.log("Could not parse reply from ", relay, str.data, err)
         }
       }
       ws.onerror = (err, event) => {
